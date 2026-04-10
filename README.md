@@ -83,10 +83,12 @@ flutter build apk
 | `tool/build_data.dart` | 从 Jekyll `_data` 生成 `lessons_bundle.json` |
 | `tool/fetch_audio.dart` | 从 GitHub `gh-pages` 拉取 MP3 |
 
-![alt text](44147715c7d6d2396369d85dd4498c91_720.jpg)
-![alt text](4207575d648504a7f2617017ae2c5079.jpg)
-![alt text](feaf969083656beed6ee89e8dbd96127.jpg)
-![alt text](7bdc128034db3f31e28b5f5ac4a0615f.jpg)
+应用界面截图（缩略预览，原图见 [`说明/`](说明/) 目录）：
+
+<img src="readme_img/44147715c7d6d2396369d85dd4498c91_720.jpg" width="280" alt="课程" />
+<img src="readme_img/4207575d648504a7f2617017ae2c5079.jpg" width="280" alt="搜索" />
+<img src="readme_img/feaf969083656beed6ee89e8dbd96127.jpg" width="280" alt="单词" />
+<img src="readme_img/7bdc128034db3f31e28b5f5ac4a0615f.jpg" width="280" alt="设置" />
 
 ---
 
