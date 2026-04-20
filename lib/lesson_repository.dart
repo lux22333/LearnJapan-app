@@ -95,6 +95,10 @@ class LessonRepository {
         ]) {
           obj[entity] = _splitText(obj[entity] as String?);
         }
+        for (final k in ['contitle', 'contitlet']) {
+          final v = obj[k];
+          if (v is String) obj[k] = v.trim();
+        }
       } else {
         for (final entity in ['conversation', 'text']) {
           obj[entity] = _splitText(obj[entity] as String?);

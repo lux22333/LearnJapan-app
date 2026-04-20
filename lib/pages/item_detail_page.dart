@@ -43,12 +43,30 @@ class ItemDetailPage extends StatelessWidget {
     );
   }
 
+  /// 与日语行对齐的中文翻译（`basic4t` / `basicct` / `contextt` 等）。
+  static String? _zhLineAt(List<dynamic>? zh, int i) {
+    if (zh == null || i < 0 || i >= zh.length) return null;
+    final s = zh[i].toString().trim();
+    if (s.isEmpty || s == '-' || s == '---') return null;
+    return s;
+  }
+
+  TextStyle? _zhStyle(BuildContext context) =>
+      Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            height: 1.35,
+          );
+
   Widget _buildPrimaryLesson(BuildContext context) {
     final basic4 = item['basic4'] as List? ?? [];
+    final basic4t = item['basic4t'] as List? ?? [];
     final basicc = item['basicc'] as List? ?? [];
+    final basicct = item['basicct'] as List? ?? [];
     final contextLines = item['context'] as List? ?? [];
+    final contextt = item['contextt'] as List? ?? [];
     final grammar = item['grammar'] as List? ?? [];
     final words = item['words'] as List? ?? [];
+    final zhStyle = _zhStyle(context);
 
     return LessonDetailShell(
       item: item,
@@ -59,30 +77,56 @@ class ItemDetailPage extends StatelessWidget {
         children: [
           _sectionTitle(context, '基本课文'),
           ...basic4.asMap().entries.map(
-                (e) => ListTile(
-                  leading: Text('${e.key + 1}.'),
-                  title: JapanHtmlView(JapanRuby.convert(e.value.toString())),
-                ),
+                (e) {
+                  final zh = _zhLineAt(basic4t, e.key);
+                  return ListTile(
+                    leading: Text('${e.key + 1}.'),
+                    title: JapanHtmlView(JapanRuby.convert(e.value.toString())),
+                    subtitle: zh != null
+                        ? Text(zh, style: zhStyle)
+                        : null,
+                  );
+                },
               ),
           const Divider(),
-          ...basicc.map(
-            (t) => ListTile(
-              title: JapanHtmlView(JapanRuby.convert(t.toString())),
-            ),
-          ),
+          ...basicc.asMap().entries.map(
+                (e) {
+                  final zh = _zhLineAt(basicct, e.key);
+                  return ListTile(
+                    title: JapanHtmlView(JapanRuby.convert(e.value.toString())),
+                    subtitle: zh != null
+                        ? Text(zh, style: zhStyle)
+                        : null,
+                  );
+                },
+              ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: JapanHtmlView(
-              JapanRuby.convert((item['contitle'] as String?) ?? ''),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                JapanHtmlView(
+                  JapanRuby.convert((item['contitle'] as String?) ?? ''),
+                ),
+                if ((item['contitlet'] as String?)?.isNotEmpty == true) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    (item['contitlet'] as String).trim(),
+                    style: zhStyle,
+                  ),
+                ],
+              ],
             ),
           ),
-          ...contextLines.map((t) {
-            final s = t.toString();
+          ...contextLines.asMap().entries.map((e) {
+            final s = e.value.toString();
             if (s.trim() == '---') {
               return const Divider(height: 24);
             }
+            final zh = _zhLineAt(contextt, e.key);
             return ListTile(
               title: JapanHtmlView(JapanRuby.convert(s)),
+              subtitle: zh != null ? Text(zh, style: zhStyle) : null,
             );
           }),
           _sectionTitle(context, '语法'),
