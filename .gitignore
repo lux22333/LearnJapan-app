@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Piper-plus 下载的 ONNX 模型（体积大，勿提交）
+tool/.piper_models/

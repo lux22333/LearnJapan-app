@@ -101,7 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         const Text(
           '数据与排版规则来自开源项目「冰河标日学习日志」。'
-          '课文与单词朗读音频打包在应用内（来源：项目 gh-pages）。若需更新音频，可运行 dart run tool/fetch_audio.dart 后重新编译。',
+          '课文与整课单词 MP3 打包在应用内（来源：项目 gh-pages）。逐词读音使用 assets/single_words/ 下切片，'
+          '可由 python tool/split_lesson_word_mp3.py 生成后重新编译。',
           style: TextStyle(fontSize: 13),
         ),
       ],

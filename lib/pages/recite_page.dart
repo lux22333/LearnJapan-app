@@ -1,39 +1,50 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:just_audio/just_audio.dart';
 
 import '../japan_ruby.dart';
 import '../prefs_store.dart';
+import '../recite_word_clip_path.dart';
+import '../word_clip_audio.dart';
 import '../widgets/japan_html_view.dart';
 import 'recite_remembered_manage_page.dart';
+
+/// 背词音频日志。过滤：`adb logcat | findstr ReciteAudio`
+void _reciteAudioLog(String message) {
+  debugPrint('[ReciteAudio] $message');
+}
 
 class RecitePage extends StatefulWidget {
   const RecitePage({
     super.key,
     required this.words,
     required this.lessonTitle,
+    this.lessonOkey = '',
   });
 
   final List<Map<String, dynamic>> words;
   final String lessonTitle;
+
+  /// 与 `assets/audio/word/{okey}.mp3` 的课别一致，用于加载 `assets/single_words/{okey}/XXXX.mp3`。
+  final String lessonOkey;
 
   @override
   State<RecitePage> createState() => _RecitePageState();
 }
 
 class _RecitePageState extends State<RecitePage> {
-  late List<_QuizItem> _quiz;
+  /// 在 [_bootstrap] 完成前为 true，避免首帧访问未初始化的 late 列表（Web/桌面会触发 LateInitializationError）。
+  bool _bootstrapping = true;
+  List<_QuizItem> _quiz = <_QuizItem>[];
   int _quizId = 0;
   bool _onlyUnremembered = true;
   bool _shuffle = false;
   bool _autoRead = true;
-  final _tts = FlutterTts();
+  AudioPlayer? _clipPlayer;
   Map<String, bool> _rwords = {};
-  /// Android：`setLanguage('ja-JP')` 为 1 才表示当前引擎已接受日语（选错「语音识别」引擎时常为 0）。
-  bool _ttsJaLanguageApplied = true;
 
   @override
   void initState() {
@@ -43,84 +54,22 @@ class _RecitePageState extends State<RecitePage> {
 
   @override
   void dispose() {
-    unawaited(_tts.stop());
+    _reciteAudioLog('dispose: dispose clip player');
+    unawaited(_clipPlayer?.dispose());
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
-    await _configureTts();
+    _reciteAudioLog(
+      'bootstrap start lesson="${widget.lessonTitle}" words=${widget.words.length} '
+      'kIsWeb=$kIsWeb platform=$defaultTargetPlatform',
+    );
     _rwords = await PrefsStore.instance.loadRemembered();
+    _reciteAudioLog('prefs remembered count=${_rwords.values.where((v) => v).length}');
     _rebuildQuiz(resetPosition: true);
     if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(_maybeWarnTtsSetup());
-    });
-  }
-
-  /// 尽量使用带日语离线包的 Google TTS，并请求音频焦点（部分机型无声与此有关）。
-  Future<void> _configureTts() async {
-    _tts.setErrorHandler((msg) => debugPrint('TTS error: $msg'));
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        final engines = await _tts.getEngines;
-        if (engines is List) {
-          for (final e in engines) {
-            if (e == 'com.google.android.tts') {
-              await _tts.setEngine('com.google.android.tts');
-              break;
-            }
-          }
-        }
-      } catch (e, st) {
-        debugPrint('TTS setEngine: $e\n$st');
-      }
-    }
-    final langResult = await _tts.setLanguage('ja-JP');
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      _ttsJaLanguageApplied = langResult == 1;
-    }
-    await _tts.setVolume(1.0);
-    await _tts.setSpeechRate(0.5);
-  }
-
-  Future<void> _maybeWarnTtsSetup() async {
-    if (!mounted || kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      return;
-    }
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-
-    if (!_ttsJaLanguageApplied) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            '当前「文字转语音」引擎不支持日语朗读。'
-            '请勿选「Google 语音识别」（那是输入法听写用的）；'
-            '请改为「Google 文字转语音引擎」或 Play 商店里的「Speech Services by Google」，'
-            '并在该引擎设置里安装日语语音包。',
-          ),
-          duration: Duration(seconds: 12),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final installed = await _tts.isLanguageInstalled('ja-JP');
-      if (installed == true || !mounted) return;
-    } catch (_) {
-      return;
-    }
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          '日语离线朗读包未就绪（联网时部分机型仍可朗读）。'
-          '请在「文字转语音输出」里点进 Google 引擎设置，下载日语语音数据。',
-        ),
-        duration: Duration(seconds: 8),
-      ),
-    );
+    setState(() => _bootstrapping = false);
+    _reciteAudioLog('bootstrap UI ready quiz=${_quiz.length} quizId=$_quizId autoRead=$_autoRead');
   }
 
   void _rebuildQuiz({bool resetPosition = false}) {
@@ -132,6 +81,9 @@ class _RecitePageState extends State<RecitePage> {
     if (resetPosition || _quizId >= _quiz.length * 2) {
       _quizId = 0;
     }
+    _reciteAudioLog(
+      '_rebuildQuiz shuffle=$_shuffle reset=$resetPosition quizLen=${_quiz.length} quizId=$_quizId',
+    );
     if (_quiz.isNotEmpty) {
       _maybeSpeakBack();
     }
@@ -139,16 +91,69 @@ class _RecitePageState extends State<RecitePage> {
   }
 
   void _maybeSpeakBack() {
-    if (!_autoRead || _quiz.isEmpty) return;
+    if (!_autoRead || _quiz.isEmpty) {
+      _reciteAudioLog(
+        '_maybeSpeakBack skip: autoRead=$_autoRead quizEmpty=${_quiz.isEmpty}',
+      );
+      return;
+    }
     if (_quizId % 2 == 1) {
-      _speak(_quiz[_quizId ~/ 2].readKana);
+      final q = _quiz[_quizId ~/ 2];
+      _reciteAudioLog(
+        '_maybeSpeakBack play clip: quizId=$_quizId idx=${_quizId ~/ 2}',
+      );
+      unawaited(_playWordClip(q, showErrorSnack: false));
+    } else {
+      _reciteAudioLog('_maybeSpeakBack skip: card front (quizId=$_quizId even)');
     }
   }
 
-  Future<void> _speak(String text) async {
-    if (text.isEmpty) return;
-    await _tts.stop();
-    await _tts.speak(text, focus: true);
+  /// 仅播放 `assets/single_words/{lessonOkey}/XXXX.mp3`。
+  Future<void> _playWordClip(_QuizItem q, {required bool showErrorSnack}) async {
+    final path = reciteWordClipAssetPath(widget.lessonOkey, q.wordIdx);
+    if (path.isEmpty) {
+      _reciteAudioLog('_playWordClip skip: empty path (okey or idx)');
+      if (showErrorSnack && mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('本课未配置 okey，无法定位切片音频。请从课程列表进入背词。')),
+        );
+      }
+      return;
+    }
+    try {
+      final bundle = DefaultAssetBundle.of(context);
+      try {
+        final session = await AudioSession.instance;
+        await session.configure(const AudioSessionConfiguration.music());
+        await session.setActive(true);
+      } catch (e, st) {
+        _reciteAudioLog('AudioSession(clip): $e\n$st');
+      }
+      _clipPlayer ??= AudioPlayer();
+      final p = _clipPlayer!;
+      await p.stop();
+      await loadWordClipIntoPlayer(p, path, bundle: bundle);
+      await p.setSpeed(1);
+      await p.seek(Duration.zero);
+      _reciteAudioLog('word clip load ok path=$path');
+      await p.play();
+      await p.playerStateStream
+          .firstWhere((s) => s.processingState == ProcessingState.completed)
+          .timeout(const Duration(seconds: 60));
+      _reciteAudioLog('word clip 播放完成');
+    } catch (e, st) {
+      _reciteAudioLog('word clip 失败: $e\n$st');
+      if (showErrorSnack && mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              '无法播放 $path\n'
+              '请确认 mp3 已放入工程、pubspec 含 assets/single_words/，并执行 flutter clean 后重新安装（勿仅热重载）。\n$e',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   int _rememberedCount() {
@@ -179,6 +184,7 @@ class _RecitePageState extends State<RecitePage> {
     }
 
     _quizId = next;
+    _reciteAudioLog('_roll -> quizId=$_quizId parity=${_quizId % 2} (1=背面)');
     _maybeSpeakBack();
     setState(() {});
   }
@@ -195,8 +201,17 @@ class _RecitePageState extends State<RecitePage> {
     setState(() {});
   }
 
+  bool _hasClipForQuiz(_QuizItem q) =>
+      reciteWordClipAssetPath(widget.lessonOkey, q.wordIdx).isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
+    if (_bootstrapping) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.lessonTitle)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     if (_quiz.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.lessonTitle)),
@@ -216,7 +231,14 @@ class _RecitePageState extends State<RecitePage> {
           if (!front)
             IconButton(
               tooltip: '朗读',
-              onPressed: q.readKana.isEmpty ? null : () => _speak(q.readKana),
+              onPressed: !_hasClipForQuiz(q)
+                  ? null
+                  : () {
+                      _reciteAudioLog(
+                        'AppBar 朗读 ${reciteWordClipAssetPath(widget.lessonOkey, q.wordIdx)}',
+                      );
+                      unawaited(_playWordClip(q, showErrorSnack: true));
+                    },
               icon: const Icon(Icons.volume_up),
             ),
           TextButton(
@@ -281,6 +303,10 @@ class _RecitePageState extends State<RecitePage> {
                 ),
                 SwitchListTile(
                   title: const Text('自动朗读（背面）'),
+                  subtitle: const Text(
+                    '翻到背面时自动播放 assets/single_words 下对应课的切片 MP3；'
+                    '无文件则静默跳过（需先运行 tool/split_lesson_word_mp3.py 并重新编译）。',
+                  ),
                   value: _autoRead,
                   onChanged: (v) => setState(() => _autoRead = v),
                 ),
@@ -331,6 +357,7 @@ class _RecitePageState extends State<RecitePage> {
 class _QuizItem {
   _QuizItem({
     required this.rid,
+    required this.wordIdx,
     required this.tipHtml,
     required this.wordTitleHtml,
     required this.wordSubHtml,
@@ -338,6 +365,7 @@ class _QuizItem {
   });
 
   final String rid;
+  final String wordIdx;
   final String tipHtml;
   final String wordTitleHtml;
   final String wordSubHtml;
@@ -367,6 +395,7 @@ class _QuizItem {
 
     return _QuizItem(
       rid: rid,
+      wordIdx: p['idx']?.toString() ?? '',
       tipHtml: tip,
       wordTitleHtml: desctitle,
       wordSubHtml: descsubtitle,

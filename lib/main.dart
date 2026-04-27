@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 
 import 'lesson_repository.dart';
 import 'pages/lesson_list_page.dart';
@@ -8,6 +12,12 @@ import 'pages/settings_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // 清掉 just_audio 旧 asset 缓存，避免「缓存文件已存在但内容不完整」时跳过重新拷贝、ExoPlayer 嗅探失败。
+  if (!kIsWeb) {
+    unawaited(AudioPlayer.clearAssetCache());
+  }
+  // 不在此处配置 AudioSession：由各页面在播放前按需配置。
+  debugPrint('[App] main() LearnJapanApp starting');
   runApp(const LearnJapanApp());
 }
 

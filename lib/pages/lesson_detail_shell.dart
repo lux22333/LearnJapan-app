@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -28,6 +30,8 @@ class _LessonDetailShellState extends State<LessonDetailShell> {
 
   String get _okey => widget.item['okey'] as String? ?? '';
 
+  void _lessonAudioLog(String msg) => debugPrint('[LessonAudio] $msg');
+
   @override
   void dispose() {
     _player.dispose();
@@ -36,29 +40,77 @@ class _LessonDetailShellState extends State<LessonDetailShell> {
 
   Future<void> _play(String kind) async {
     final okey = _okey;
-    if (okey.isEmpty) return;
-    final path = kind == 'lesson'
-        ? 'assets/audio/lesson/$okey.mp3'
-        : 'assets/audio/word/$okey.mp3';
+    _lessonAudioLog('_play start kind=$kind okey="$okey"');
+    if (okey.isEmpty) {
+      _lessonAudioLog('_play abort okey empty');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('本课缺少音频标识（okey），无法播放。请从课程列表进入课文页再试。'),
+        ),
+      );
+      return;
+    }
+    final base = kind == 'lesson' ? 'assets/audio/lesson/' : 'assets/audio/word/';
+    const exts = <String>['.mp3', '.wav'];
+    _lessonAudioLog('_play try $base$okey.(mp3|wav)');
     setState(() {
       _busy = true;
       _panel = true;
     });
     try {
-      await _player.setAsset(path);
+      if (!kIsWeb) {
+        try {
+          final session = await AudioSession.instance;
+          await session.configure(const AudioSessionConfiguration.music());
+          await session.setActive(true);
+          _lessonAudioLog('_play AudioSession music+active ok');
+        } catch (e, st) {
+          _lessonAudioLog('AudioSession: $e\n$st');
+        }
+      }
+      await _player.stop();
+      _lessonAudioLog('_play after stop()');
+      Object? lastErr;
+      var played = '';
+      for (final ext in exts) {
+        final path = '$base$okey$ext';
+        try {
+          await _player.setAsset(path);
+          played = path;
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (played.isEmpty) {
+        throw lastErr ?? Exception('未找到 $base$okey 的 mp3 或 wav');
+      }
+      _lessonAudioLog(
+        '_play setAsset ok path=$played duration=${_player.duration} '
+        'processing=${_player.processingState}',
+      );
       await _player.setSpeed(1);
+      await _player.seek(Duration.zero);
       await _player.play();
+      _lessonAudioLog(
+        '_play play() returned playing=${_player.playing} processing=${_player.processingState}',
+      );
     } catch (e) {
+      _lessonAudioLog('_play EXCEPTION: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '无法加载音频（$e）。若尚未下载资源，请在项目目录执行：dart run tool/fetch_audio.dart',
+            '无法播放内置音频（与系统「文字转语音」无关）。\n$e\n'
+            '可：dart run tool/fetch_audio.dart 拉取 MP3，'
+            '或 python tool/synth_audio_piper.py 生成本机 Piper WAV。',
           ),
         ),
       );
       setState(() => _panel = false);
     } finally {
+      _lessonAudioLog('_play finally busy->false');
       if (mounted) setState(() => _busy = false);
     }
   }

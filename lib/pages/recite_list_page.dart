@@ -66,6 +66,7 @@ class _ReciteListPageState extends State<ReciteListPage> {
                     words.map((e) => Map<String, dynamic>.from(e as Map)),
                   ),
                   lessonTitle: g['lesson'] as String? ?? '',
+                  lessonOkey: (g['okey'] as String?)?.trim().toLowerCase() ?? '',
                 ),
               ),
             );

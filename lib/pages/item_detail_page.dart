@@ -1,7 +1,13 @@
+import 'dart:async';
+
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 
 import '../japan_ruby.dart';
 import '../prefs_store.dart';
+import '../recite_word_clip_path.dart';
+import '../word_clip_audio.dart';
 import '../widgets/japan_html_view.dart';
 import 'lesson_detail_shell.dart';
 
@@ -304,11 +310,19 @@ class _WordDetailBody extends StatefulWidget {
 
 class _WordDetailBodyState extends State<_WordDetailBody> {
   bool _remember = false;
+  final AudioPlayer _player = AudioPlayer();
+  bool _clipBusy = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_player.dispose());
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -330,6 +344,56 @@ class _WordDetailBodyState extends State<_WordDetailBody> {
     final all = await PrefsStore.instance.loadRemembered();
     all[key] = _remember;
     await PrefsStore.instance.saveRemembered(all);
+  }
+
+  Future<void> _playWordClip() async {
+    if (_clipBusy) {
+      return;
+    }
+    final lesson = widget.item['lesson']?.toString();
+    final idx = widget.item['idx']?.toString();
+    final okey = wordLessonFieldToOkey(lesson);
+    final path = reciteWordClipAssetPath(okey, idx ?? '');
+    if (path.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法解析课本字段，无法定位切片音频。')),
+      );
+      return;
+    }
+    final bundle = DefaultAssetBundle.of(context);
+    setState(() => _clipBusy = true);
+    try {
+      try {
+        final session = await AudioSession.instance;
+        await session.configure(const AudioSessionConfiguration.music());
+        await session.setActive(true);
+      } catch (_) {}
+      await _player.stop();
+      await loadWordClipIntoPlayer(_player, path, bundle: bundle);
+      await _player.setSpeed(1);
+      await _player.seek(Duration.zero);
+      await _player.play();
+      await _player.playerStateStream
+          .firstWhere((s) => s.processingState == ProcessingState.completed)
+          .timeout(const Duration(seconds: 60));
+    } catch (e, st) {
+      debugPrint('[WordDetail] clip $e\n$st');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '无法播放切片：$path\n请确认 mp3 在工程内且已 flutter clean 后全量重装。\n$e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _clipBusy = false);
+      }
+    }
   }
 
   @override
@@ -355,6 +419,28 @@ class _WordDetailBodyState extends State<_WordDetailBody> {
             leading: const Icon(Icons.record_voice_over),
             title: const Text('发音'),
             subtitle: JapanHtmlView(JapanRuby.convert(w['kana']?.toString() ?? '')),
+          ),
+          ListTile(
+            leading: const Icon(Icons.audiotrack),
+            title: const Text('播放切片读音'),
+            subtitle: Text(
+              '从 assets/single_words 下对应课目录加载与本词 idx 一致的 MP3（与背词页相同）。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            trailing: _clipBusy
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: '播放',
+                    icon: const Icon(Icons.play_arrow),
+                    onPressed: _playWordClip,
+                  ),
           ),
           ListTile(
             leading: const Icon(Icons.menu_book),

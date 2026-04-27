@@ -18,7 +18,7 @@ packages:
     source: hosted
     version: "2.13.1"
   audio_session:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: audio_session
       sha256: "2b7fff16a552486d078bfc09a8cde19f426dc6d6329262b684182597bec5b1ac"
@@ -203,14 +203,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_tts:
-    dependency: "direct main"
-    description:
-      name: flutter_tts
-      sha256: ce5eb209b40e95f2f4a1397116c87ab2fcdff32257d04ed7a764e75894c03775
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.2.5"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -481,7 +473,7 @@ packages:
     source: hosted
     version: "3.2.1"
   path:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
