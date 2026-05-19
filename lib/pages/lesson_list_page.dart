@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../japan_ruby.dart';
 import '../lesson_repository.dart';
 import '../widgets/japan_html_view.dart';
+import 'basic4_grammar_page.dart';
 import 'item_detail_page.dart';
 
 class LessonListPage extends StatefulWidget {
@@ -49,10 +50,34 @@ class _LessonListPageState extends State<LessonListPage> {
 
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: groups.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemCount: groups.length + 1,
+      separatorBuilder: (context, index) {
+        if (index == 0) {
+          return const SizedBox.shrink();
+        }
+        return const Divider(height: 1);
+      },
       itemBuilder: (context, i) {
-        final g = groups[i];
+        if (i == 0) {
+          return Card(
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: ListTile(
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: const Text('基本课文语法'),
+              subtitle: const Text('第 1～48 课 basic4 句式说明（整合阅读）'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const Basic4GrammarPage(),
+                  ),
+                );
+              },
+            ),
+          );
+        }
+        final j = i - 1;
+        final g = groups[j];
         final titleHtml = JapanRuby.convert((g['title'] as String?) ?? '');
         final texttitle = g['texttitle'] as String?;
         final subtitle = g['contitle'] as String?;

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import 'basic4_grammar_repository.dart';
 import 'lesson_repository.dart';
 import 'pages/lesson_list_page.dart';
 import 'pages/recite_list_page.dart';
@@ -54,6 +55,7 @@ class _HomeShellState extends State<_HomeShell> {
   void initState() {
     super.initState();
     LessonRepository.instance.load();
+    Basic4GrammarRepository.instance.load();
   }
 
   @override
