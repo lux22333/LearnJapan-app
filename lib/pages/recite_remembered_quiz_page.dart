@@ -27,9 +27,13 @@ class ReciteRememberedQuizPage extends StatefulWidget {
   const ReciteRememberedQuizPage({
     super.key,
     required this.rememberedWords,
+    this.scopeLabel = '全部已记住',
   });
 
   final List<Map<String, dynamic>> rememberedWords;
+
+  /// 测验范围说明，显示在 AppBar。
+  final String scopeLabel;
 
   @override
   State<ReciteRememberedQuizPage> createState() => _ReciteRememberedQuizPageState();
@@ -177,13 +181,13 @@ class _ReciteRememberedQuizPageState extends State<ReciteRememberedQuizPage> {
   Widget build(BuildContext context) {
     if (widget.rememberedWords.length < 4) {
       return Scaffold(
-        appBar: AppBar(title: const Text('已记住 · 全课测验')),
+        appBar: AppBar(title: Text('已记住测验 · ${widget.scopeLabel}')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              '全词书中已记住单词少于 4 个，无法组成四选一。\n'
-              '请在各课背词中标记「已记住」后再来。',
+              '当前范围已记住单词少于 4 个，无法组成四选一。\n'
+              '请扩大选择范围或在各课背词中标记「已记住」。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
             ),
@@ -194,7 +198,7 @@ class _ReciteRememberedQuizPageState extends State<ReciteRememberedQuizPage> {
 
     if (_questions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('已记住 · 全课测验')),
+        appBar: AppBar(title: Text('已记住测验 · ${widget.scopeLabel}')),
         body: const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
@@ -213,7 +217,7 @@ class _ReciteRememberedQuizPageState extends State<ReciteRememberedQuizPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('已记住 · 全课测验'),
+            Text('已记住测验 · ${widget.scopeLabel}'),
             if (!done)
               Text(
                 '${_qi + 1} / ${_questions.length}',
